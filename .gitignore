@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# YOLO model weights (large files)
+*.pt
+*.pth
+*.onnx
+*.weights
+
+# Dataset (download separately from CBIS-DDSM)
+datasets/
+data/
+*.dcm
+*.csv
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Environment
+.env
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code session files
+.claude/
+
+# Logs and temp
+*.log
+runs/
+wandb/
+mlruns/

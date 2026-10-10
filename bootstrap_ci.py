@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""
+Bootstrap confidence intervals for FROC S@2 and mAP50 on CBIS-DDSM test set.
+Resamples the 458-image test set with replacement (B=2000 iterations per seed).
+Reports 95% CI alongside mean ± std across seeds.
+Run on server: python -u bootstrap_ci.py
+"""
+
+import sys
+from pathlib import Path
+import numpy as np
+from PIL import Image as PILImage
+from ultralytics import YOLO
+
+BASE      = Path("/home/modss/Desktop/dhanraj")
+TEST_IMGS = BASE / "canonical_4class/images/test"
+TEST_LBLS = BASE / "canonical_4class/labels/test"
+SEEDS     = [42, 1, 123]
+MASS_W    = {s: BASE/f"canonical_mass_clean/runs/mass_clean_seed{s}/weights/best.pt"  for s in SEEDS}
+CALC_W    = {s: BASE/f"canonical_calc_clean/runs/calc_clean_seed{s}/weights/best.pt"  for s in SEEDS}
+UNI_W     = {s: BASE/f"canonical_4class/runs/universal_seed{s}/weights/best.pt"        for s in SEEDS}
+
+CONF      = 0.01
+NMS_IOU   = 0.45
+IMG_SIZE  = 1280
+HIT_IOU   = 0.30
+AP_IOU    = 0.50
+FP_TARGET = 2.0
+B         = 2000    # bootstrap iterations
+RNG       = np.random.default_rng(0)
+
+CLASS_NAMES = ["benign_mass", "malig_mass", "benign_calc", "malig_calc"]
+
+
+def load_gt():
+    img_paths = sorted(TEST_IMGS.glob("*.jpg")) + sorted(TEST_IMGS.glob("*.png"))
+    gt_list   = []   # per image: list of (cls, x1, y1, x2, y2)
+    for ip in img_paths:
+        lbl = TEST_LBLS / (ip.stem + ".txt")
+        boxes = []
+        if lbl.exists():
+            with PILImage.open(ip) as im: W, H = im.size
+            for ln in lbl.read_text().strip().splitlines():
+                p = ln.split()
+                if len(p) < 5: continue
+                cls = int(p[0])
+                cx, cy, bw, bh = map(float, p[1:5])
+                x1 = (cx - bw/2)*W; y1 = (cy - bh/2)*H
+                x2 = (cx + bw/2)*W; y2 = (cy + bh/2)*H
+                boxes.append((cls, x1, y1, x2, y2))
+        gt_list.append(boxes)
+    print(f"Loaded {len(img_paths)} test images, "
+          f"{sum(len(g) for g in gt_list)} GT boxes")
+    return img_paths, gt_list
+
+
+def infer(model, ip, cls_offset=0):
+    try:
+        res = model.predict(str(ip), conf=CONF, iou=NMS_IOU,
+                            imgsz=IMG_SIZE, verbose=False)[0]
+    except Exception:
+        return []
+    preds = []
+    if res.boxes is not None and len(res.boxes):
+        for b, c, cl in zip(res.boxes.xyxy.cpu().numpy(),
+                             res.boxes.conf.cpu().numpy(),
+                             res.boxes.cls.cpu().numpy().astype(int)):
+            preds.append((cl + cls_offset, float(c),
+                          float(b[0]), float(b[1]), float(b[2]), float(b[3])))
+    return preds
+
+
+def run_inference(img_paths, seed):
+    print(f"  Seed {seed} — loading models ...")
+    uni  = YOLO(str(UNI_W[seed]))
+    mass = YOLO(str(MASS_W[seed]))
+    calc = YOLO(str(CALC_W[seed]))
+    uni_preds, moe_preds = [], []
+    for idx, ip in enumerate(img_paths):
+        if (idx+1) % 50 == 0: print(f"    [{idx+1}/{len(img_paths)}]", end="\r")
+        uni_preds.append(infer(uni, ip, 0))
+        moe_preds.append(infer(mass, ip, 0) + infer(calc, ip, 2))
+    print()
+    return uni_preds, moe_preds   # each: list[list[preds]] indexed by image
+
+
+def box_iou(a, b):
+    ix1 = max(a[0], b[0]); iy1 = max(a[1], b[1])
+    ix2 = min(a[2], b[2]); iy2 = min(a[3], b[3])
+    if ix2 <= ix1 or iy2 <= iy1: return 0.0
+    i = (ix2-ix1)*(iy2-iy1)
+    u = (a[2]-a[0])*(a[3]-a[1]) + (b[2]-b[0])*(b[3]-b[1]) - i
+    return i/(u+1e-9)
+
+
+def froc_s2(pred_list, gt_list, indices):
+    """Compute S@2 on the subset of images given by indices."""
+    n = len(indices)
+    flat_p = []
+    for new_i, orig_i in enumerate(indices):
+        for cls, cf, x1, y1, x2, y2 in pred_list[orig_i]:
+            flat_p.append((new_i, cls, cf, x1, y1, x2, y2))
+    flat_p.sort(key=lambda x: -x[2])
+    gt_sub = [gt_list[i] for i in indices]
+    total_gt = sum(len(g) for g in gt_sub)
+    if total_gt == 0: return 0.0
+    matched = [[False]*len(g) for g in gt_sub]
+    tp, fp = 0, 0
+    for new_i, cls, cf, x1, y1, x2, y2 in flat_p:
+        biou, bj = 0.0, -1
+        for j, (gc, gx1, gy1, gx2, gy2) in enumerate(gt_sub[new_i]):
+            if gc != cls: continue
+            iou = box_iou((x1,y1,x2,y2), (gx1,gy1,gx2,gy2))
+            if iou > biou: biou, bj = iou, j
+        if biou >= HIT_IOU and bj >= 0 and not matched[new_i][bj]:
+            matched[new_i][bj] = True; tp += 1
+        else:
+            fp += 1
+        if fp/n > FP_TARGET: break
+    # linear interpolation at exactly FP_TARGET
+    fp_rate = fp/n
+    sens = tp/total_gt
+    return float(sens)
+
+
+def map50(pred_list, gt_list, indices):
+    flat_p = []
+    for new_i, orig_i in enumerate(indices):
+        for cls, cf, x1, y1, x2, y2 in pred_list[orig_i]:
+            flat_p.append((new_i, cls, cf, x1, y1, x2, y2))
+    gt_sub = [gt_list[i] for i in indices]
+    aps = []
+    for c in range(4):
+        cp = [(i, cf, x1,y1,x2,y2) for i,cl,cf,x1,y1,x2,y2 in flat_p if cl==c]
+        cg = [[b[1:] for b in g if b[0]==c] for g in gt_sub]
+        total = sum(len(g) for g in cg)
+        if total == 0 or not cp:
+            aps.append(0.0); continue
+        cp.sort(key=lambda x: -x[1])
+        matched = [[False]*len(g) for g in cg]
+        tp_l, fp_l = [], []
+        for i, cf, x1,y1,x2,y2 in cp:
+            biou, bj = 0.0, -1
+            for j, (gx1,gy1,gx2,gy2) in enumerate(cg[i]):
+                iou = box_iou((x1,y1,x2,y2),(gx1,gy1,gx2,gy2))
+                if iou > biou: biou, bj = iou, j
+            if biou >= AP_IOU and bj >= 0 and not matched[i][bj]:
+                matched[i][bj] = True; tp_l.append(1); fp_l.append(0)
+            else:
+                tp_l.append(0); fp_l.append(1)
+        tc = np.cumsum(tp_l); fc = np.cumsum(fp_l)
+        rec = tc/total; prec = tc/(tc+fc+1e-9)
+        ap = sum(prec[rec>=t].max() if (rec>=t).any() else 0.0
+                 for t in np.linspace(0,1,101)) / 101
+        aps.append(float(ap))
+    return float(np.mean(aps))
+
+
+def bootstrap(pred_list, gt_list, metric_fn, n_imgs):
+    scores = []
+    for _ in range(B):
+        idx = RNG.integers(0, n_imgs, size=n_imgs)
+        scores.append(metric_fn(pred_list, gt_list, idx))
+    return np.array(scores)
+
+
+if __name__ == "__main__":
+    img_paths, gt_list = load_gt()
+    n = len(img_paths)
+
+    results = {}  # model -> seed -> {s2, map50, s2_ci, map50_ci}
+    for seed in SEEDS:
+        uni_p, moe_p = run_inference(img_paths, seed)
+        for mname, preds in [("Universal", uni_p), ("DS-MoE", moe_p)]:
+            print(f"\nBootstrapping {mname} seed {seed} (B={B}) ...")
+            bs_s2   = bootstrap(preds, gt_list, froc_s2, n)
+            bs_map  = bootstrap(preds, gt_list, map50, n)
+            ci_s2   = (np.percentile(bs_s2, 2.5), np.percentile(bs_s2, 97.5))
+            ci_map  = (np.percentile(bs_map, 2.5), np.percentile(bs_map, 97.5))
+            # also compute point estimates
+            all_idx = list(range(n))
+            s2_pt   = froc_s2(preds, gt_list, all_idx)
+            map_pt  = map50(preds, gt_list, all_idx)
+            results.setdefault(mname, {})[seed] = {
+                "s2": s2_pt, "map50": map_pt,
+                "s2_ci": ci_s2, "map50_ci": ci_map
+            }
+            print(f"  S@2  = {s2_pt:.4f}  95% CI [{ci_s2[0]:.4f}, {ci_s2[1]:.4f}]")
+            print(f"  mAP50= {map_pt:.4f}  95% CI [{ci_map[0]:.4f}, {ci_map[1]:.4f}]")
+
+    print(f"\n{'='*66}")
+    print("BOOTSTRAP SUMMARY (point estimate, mean across seeds, 95% CI)")
+    print(f"{'='*66}")
+    for mname in ["Universal", "DS-MoE"]:
+        d = results[mname]
+        s2s   = [d[s]["s2"]   for s in SEEDS]
+        maps  = [d[s]["map50"] for s in SEEDS]
+        # aggregate CI across seeds (pool bootstrap samples)
+        lo_s2  = np.mean([d[s]["s2_ci"][0]   for s in SEEDS])
+        hi_s2  = np.mean([d[s]["s2_ci"][1]   for s in SEEDS])
+        lo_map = np.mean([d[s]["map50_ci"][0] for s in SEEDS])
+        hi_map = np.mean([d[s]["map50_ci"][1] for s in SEEDS])
+        print(f"\n{mname}")
+        print(f"  FROC S@2 : {np.mean(s2s):.4f} ± {np.std(s2s):.4f}  "
+              f"95% CI [{lo_s2:.4f}, {hi_s2:.4f}]")
+        print(f"  mAP50    : {np.mean(maps):.4f} ± {np.std(maps):.4f}  "
+              f"95% CI [{lo_map:.4f}, {hi_map:.4f}]")
+    print('='*66)

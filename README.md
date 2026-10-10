@@ -1,6 +1,6 @@
 # A Domain-Split Mixture-of-Experts Framework for Four-Class Mammography Lesion Detection on CBIS-DDSM
 
-**Accepted at CVIP 2026** — Computer Vision and Image Processing Conference  
+**Accepted at CVIP 2026** : Computer Vision and Image Processing Conference  
 Published in *Springer Lecture Notes in Computer Science*
 
 ## Overview

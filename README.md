@@ -12,7 +12,7 @@ This repository contains the full implementation of our Domain-Split Mixture-of-
 - **Mass Expert** — detects `benign_mass` and `malignant_mass`
 - **Calc Expert** — detects `benign_calc` and `malignant_calc`
 
-A gated router combines their predictions at inference time, achieving better per-class mAP than a single universal model.
+DS-MoE merges predictions through a parameter-free class-offset union, no routing required. A separate Gated MoE variant adds a lightweight router for comparison.
 
 **4 Target Classes:**
 

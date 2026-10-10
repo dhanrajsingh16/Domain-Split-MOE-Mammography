@@ -47,11 +47,11 @@ All results on the 458-image CBIS-DDSM test set, mean ± std over 3 seeds (42/1/
 
 ### Expert Validation mAP@0.5 (Table 2)
 
-| Expert | mAP@0.5 | Benign AP | Malignant AP |
-|---|---|---|---|
-| Mass Expert (YOLO11l) | 0.499 | 0.264 | 0.734 |
-| Calc Expert (YOLO11l) | 0.167 | 0.189 | 0.145 |
-| Universal (4-class) | 0.062 | BM 0.066 · MM 0.124 · BC 0.014 · MC 0.024 | — |
+| Expert | mAP@0.5 | Ben. Mass | Mal. Mass | Ben. Calc | Mal. Calc |
+|---|---|---|---|---|---|
+| Mass Expert (YOLO11l) | 0.499 | 0.264 | 0.734 | — | — |
+| Calc Expert (YOLO11l) | 0.167 | — | — | 0.189 | 0.145 |
+| Universal (4-class) | 0.062 | 0.066 | 0.124 | 0.014 | 0.024 |
 
 ### Zero-Shot Cross-Dataset Transfer
 

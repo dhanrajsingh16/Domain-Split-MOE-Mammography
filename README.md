@@ -49,8 +49,8 @@ All results on the 458-image CBIS-DDSM test set, mean ± std over 3 seeds (42/1/
 
 | Expert | mAP@0.5 | Ben. Mass | Mal. Mass | Ben. Calc | Mal. Calc |
 |---|---|---|---|---|---|
-| Mass Expert (YOLO11l) | 0.499 | 0.264 | 0.734 | — | — |
-| Calc Expert (YOLO11l) | 0.167 | — | — | 0.189 | 0.145 |
+| Mass Expert (YOLO11l) | 0.499 | 0.264 | 0.734 | 0.000 | 0.000 |
+| Calc Expert (YOLO11l) | 0.167 | 0.000 | 0.000 | 0.189 | 0.145 |
 | Universal (4-class) | 0.062 | 0.066 | 0.124 | 0.014 | 0.024 |
 
 ### Zero-Shot Cross-Dataset Transfer

@@ -732,13 +732,7 @@ STATUS TRACKER
   [FAILED] Exp 13 v4 — Mass 1024px batch=8 mosaic=0 (0.2165, 3rd fail)
   [DONE]  Exp 14 v2 — Calc 768px (TEST mAP50=0.3837, +10.1%)
   [BEST]  Exp 14 v3 — Calc 1024px (TEST mAP50=0.4024, +15.4% WIN)
-  [TODO]  Mass: bbox sanity-check + find Exp 6 (0.447) saved weights
-
-  [TODO]  Run Exp 13 v2 + Exp 14 v2 in parallel, fill in test results
-  [TODO]  Fill in Exp 9 final test results when complete
-  [TODO]  Build Exp 15 — 4-class MoE merge from v2 specialists
-  [TODO]  Write paper sections
-  [TODO]  Build Streamlit demo (after submission)
+          Mass: bbox sanity-check + find Exp 6 (0.447) saved weights
 
 ================================================================
 END OF RESULTS FILE — Last Updated: June 8, 2026

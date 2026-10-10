@@ -24,14 +24,46 @@ A gated router combines their predictions at inference time, achieving better pe
 
 ## Results
 
-| Model | mAP@0.5 | mAP@0.5:0.95 |
-|---|---|---|
-| Universal (baseline) | — | — |
-| Mass Expert (YOLOv8l) | — | — |
-| Calc Expert (YOLOv8l) | — | — |
-| **MoE Ensemble (ours)** | **best** | **best** |
+All results on the 458-image CBIS-DDSM test set, mean ± std over 3 seeds (42/1/123), patient-level leakage-free evaluation.
 
-*(See `ALL_RESULTS.txt` for full per-class metrics and 3-seed bootstrap confidence intervals)*
+### Main Comparison (Table 3)
+
+| Model | mAP@0.5 | mAP@0.5:0.95 | FROC S@2 |
+|---|---|---|---|
+| Universal (baseline) | 0.0570 ± 0.0014 | 0.0243 ± 0.0003 | 0.2021 ± 0.0071 |
+| **DS-MoE (ours)** | **0.0649 ± 0.0114** | **0.0300 ± 0.0049** | **0.2027 ± 0.0114** |
+| Gated MoE | 0.0589 ± 0.0075 | 0.0263 ± 0.0034 | 0.1950 ± 0.0150 |
+
+**DS-MoE vs Universal: mAP@0.5 +13.9% · FROC S@2 +0.3%**
+
+### Per-Class mAP@0.5 (Table 4)
+
+| Model | Benign Mass | Malignant Mass | Benign Calc | Malignant Calc |
+|---|---|---|---|---|
+| Universal | 0.0664 | 0.1236 | **0.0144** | 0.0237 |
+| **DS-MoE (ours)** | **0.0843** | **0.1421** | 0.0099 | 0.0234 |
+| Gated MoE | 0.0802 | 0.1133 | 0.0082 | **0.0338** |
+| Δ DS-MoE | +27.0% | +15.0% | −31.3% | −1.3% |
+
+### Expert Validation mAP@0.5 (Table 2)
+
+| Expert | mAP@0.5 | Benign AP | Malignant AP |
+|---|---|---|---|
+| Mass Expert (YOLO11l) | 0.499 | 0.264 | 0.734 |
+| Calc Expert (YOLO11l) | 0.167 | 0.189 | 0.145 |
+| Universal (4-class) | 0.062 | BM 0.066 · MM 0.124 · BC 0.014 · MC 0.024 | — |
+
+### Zero-Shot Cross-Dataset Transfer
+
+| Dataset | Universal | DS-MoE | Δ |
+|---|---|---|---|
+| INbreast (mass FROC S@2, 116 GT boxes) | 0.7443 ± 0.0226 | **0.8305 ± 0.0400** | +11.6% |
+| MIAS (mAP@0.5, 119 GT boxes) | 0.0880 ± 0.0330 | **0.0917 ± 0.0063** | +4.2% |
+| CMMD (image-level sensitivity, proxy) | 0.0020 ± 0.0014 | **0.1548 ± 0.0287** | +77× |
+
+> **Note on absolute scores:** Values are intentionally conservative — strict patient-level evaluation removes the 30–50% inflation common in image-level-split benchmarks. Read as controlled relative comparisons, not absolute capability.
+
+*(See `ALL_RESULTS.txt` and `moe_eval_3seeds.ipynb` for full per-seed breakdown and bootstrap confidence intervals)*
 
 ## Repository Structure
 

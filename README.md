@@ -113,7 +113,7 @@ If you use this work, please cite:
 ```bibtex
 @inproceedings{singh2026domainsplit,
   title     = {A Domain-Split Mixture-of-Experts Framework for Four-Class Mammography Lesion Detection on CBIS-DDSM},
-  author    = {Singh, Dhanraj and others},
+  author    = {Singh, Dhanraj},
   booktitle = {Computer Vision and Image Processing (CVIP 2026)},
   series    = {Lecture Notes in Computer Science},
   publisher = {Springer},
